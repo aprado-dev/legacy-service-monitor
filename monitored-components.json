@@ -1,0 +1,50 @@
+{
+  "General": {
+    "Environment": "QA",
+    "ApplicationName": "Legacy Applications Monitoring",
+    "LogDirectory": "C:\\ProgramData\\LegacyServiceMonitor\\Logs",
+    "StateFile": "C:\\ProgramData\\LegacyServiceMonitor\\state.json",
+    "FailureThreshold": 2,
+    "SendRecoveryNotification": true
+  },
+  "WebSites": [
+    {
+      "Name": "Default Web Site",
+      "Enabled": true
+    }
+  ],
+  "ApplicationPools": [
+    {
+      "Name": "DefaultAppPool",
+      "Enabled": true
+    }
+  ],
+  "WindowsServices": [
+    {
+      "Name": "W3SVC",
+      "DisplayName": "World Wide Web Publishing Service",
+      "Enabled": true
+    }
+  ],
+  "Notification": {
+    "From": "monitoring@company.com",
+    "To": [
+      "support-team@company.com"
+    ],
+    "Cc": [],
+    "SubjectPrefix": "[Legacy Monitor]",
+    "Smtp": {
+      "Server": "smtp.company.com",
+      "Port": 587,
+      "UseSsl": true,
+      "UseDefaultCredentials": false,
+      "CredentialFile": "C:\\ProgramData\\LegacyServiceMonitor\\smtp-credential.xml"
+    },
+    "Graph": {
+      "TenantIdEnvironmentVariable": "GRAPH_TENANT_ID",
+      "ClientIdEnvironmentVariable": "GRAPH_CLIENT_ID",
+      "ClientSecretEnvironmentVariable": "GRAPH_CLIENT_SECRET",
+      "SenderMailbox": "monitoring@company.com"
+    }
+  }
+}
