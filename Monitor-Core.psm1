@@ -19,8 +19,33 @@ function Write-MonitorLog {
     }
 
     $logFile = Join-Path $LogDirectory ("monitor-{0}.log" -f (Get-Date -Format "yyyy-MM-dd"))
-    $line = "{0} [{1}] {2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Level, $Message
+    $line = "{0} [{1}] [{2}] {3}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $env:COMPUTERNAME, $Level, $Message
     Add-Content -LiteralPath $logFile -Value $line -Encoding UTF8
+}
+
+function Remove-OldMonitorLogs {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$LogDirectory,
+
+        [Parameter(Mandatory)]
+        [int]$RetentionDays
+    )
+
+    if (-not (Test-Path -LiteralPath $LogDirectory)) {
+        return
+    }
+
+    if ($RetentionDays -lt 1) {
+        $RetentionDays = 1
+    }
+
+    $cutoff = (Get-Date).AddDays(-$RetentionDays)
+
+    Get-ChildItem -LiteralPath $LogDirectory -Filter "monitor-*.log" -File |
+        Where-Object { $_.LastWriteTime -lt $cutoff } |
+        Remove-Item -Force
 }
 
 function Get-MonitorConfiguration {
@@ -39,7 +64,7 @@ function Get-MonitorConfiguration {
 
 function Get-InitialState {
     return [ordered]@{
-        Version = 1
+        Version = 2
         Components = [ordered]@{}
     }
 }
@@ -111,7 +136,11 @@ function New-ComponentResult {
         [Parameter(Mandatory)]
         [string]$CurrentStatus,
 
-        [string]$Details = ""
+        [string]$Details = "",
+        [string]$ApplicationName = "",
+        [string]$BeatId = "",
+        [string]$Squad = "",
+        [string]$Vendor = ""
     )
 
     [pscustomobject]@{
@@ -120,52 +149,52 @@ function New-ComponentResult {
         IsHealthy = $IsHealthy
         CurrentStatus = $CurrentStatus
         Details = $Details
+        ApplicationName = $ApplicationName
+        BeatId = $BeatId
+        Squad = $Squad
+        Vendor = $Vendor
         CheckedAt = (Get-Date).ToString("o")
     }
 }
 
-function Test-WebSites {
+function Test-WebApplications {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        $WebSites
+        $WebApplications
     )
 
     Import-Module WebAdministration -ErrorAction Stop
 
-    foreach ($site in @($WebSites | Where-Object { $_.Enabled -eq $true })) {
+    foreach ($webApplication in @($WebApplications | Where-Object { $_.Enabled -eq $true })) {
         try {
-            $item = Get-Item -LiteralPath ("IIS:\Sites\{0}" -f $site.Name) -ErrorAction Stop
-            $status = [string]$item.State
-            New-ComponentResult -Type "WebSite" -Name $site.Name `
-                -IsHealthy ($status -eq "Started") -CurrentStatus $status
+            $site = Get-Item -LiteralPath ("IIS:\Sites\{0}" -f $webApplication.SiteName) -ErrorAction Stop
+            $siteStatus = [string]$site.State
+            New-ComponentResult -Type "WebSite" -Name $webApplication.SiteName `
+                -IsHealthy ($siteStatus -eq "Started") -CurrentStatus $siteStatus `
+                -ApplicationName $webApplication.ApplicationName -BeatId $webApplication.BeatId `
+                -Squad $webApplication.Squad -Vendor $webApplication.Vendor
         }
         catch {
-            New-ComponentResult -Type "WebSite" -Name $site.Name `
-                -IsHealthy $false -CurrentStatus "NotFoundOrUnavailable" -Details $_.Exception.Message
+            New-ComponentResult -Type "WebSite" -Name $webApplication.SiteName `
+                -IsHealthy $false -CurrentStatus "NotFoundOrUnavailable" -Details $_.Exception.Message `
+                -ApplicationName $webApplication.ApplicationName -BeatId $webApplication.BeatId `
+                -Squad $webApplication.Squad -Vendor $webApplication.Vendor
         }
-    }
-}
 
-function Test-ApplicationPools {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        $ApplicationPools
-    )
-
-    Import-Module WebAdministration -ErrorAction Stop
-
-    foreach ($pool in @($ApplicationPools | Where-Object { $_.Enabled -eq $true })) {
         try {
-            $item = Get-Item -LiteralPath ("IIS:\AppPools\{0}" -f $pool.Name) -ErrorAction Stop
-            $status = [string]$item.State
-            New-ComponentResult -Type "ApplicationPool" -Name $pool.Name `
-                -IsHealthy ($status -eq "Started") -CurrentStatus $status
+            $pool = Get-Item -LiteralPath ("IIS:\AppPools\{0}" -f $webApplication.PoolName) -ErrorAction Stop
+            $poolStatus = [string]$pool.State
+            New-ComponentResult -Type "ApplicationPool" -Name $webApplication.PoolName `
+                -IsHealthy ($poolStatus -eq "Started") -CurrentStatus $poolStatus `
+                -ApplicationName $webApplication.ApplicationName -BeatId $webApplication.BeatId `
+                -Squad $webApplication.Squad -Vendor $webApplication.Vendor
         }
         catch {
-            New-ComponentResult -Type "ApplicationPool" -Name $pool.Name `
-                -IsHealthy $false -CurrentStatus "NotFoundOrUnavailable" -Details $_.Exception.Message
+            New-ComponentResult -Type "ApplicationPool" -Name $webApplication.PoolName `
+                -IsHealthy $false -CurrentStatus "NotFoundOrUnavailable" -Details $_.Exception.Message `
+                -ApplicationName $webApplication.ApplicationName -BeatId $webApplication.BeatId `
+                -Squad $webApplication.Squad -Vendor $webApplication.Vendor
         }
     }
 }
@@ -179,21 +208,19 @@ function Test-WindowsServices {
 
     foreach ($configuredService in @($WindowsServices | Where-Object { $_.Enabled -eq $true })) {
         try {
-            $service = Get-Service -Name $configuredService.Name -ErrorAction Stop
+            $service = Get-Service -Name $configuredService.ServiceName -ErrorAction Stop
             $status = [string]$service.Status
-            $displayName = if ($configuredService.DisplayName) {
-                [string]$configuredService.DisplayName
-            }
-            else {
-                [string]$service.DisplayName
-            }
 
-            New-ComponentResult -Type "WindowsService" -Name $configuredService.Name `
-                -IsHealthy ($status -eq "Running") -CurrentStatus $status -Details $displayName
+            New-ComponentResult -Type "WindowsService" -Name $configuredService.ServiceName `
+                -IsHealthy ($status -eq "Running") -CurrentStatus $status -Details $service.DisplayName `
+                -ApplicationName $configuredService.ApplicationName -BeatId $configuredService.BeatId `
+                -Squad $configuredService.Squad -Vendor $configuredService.Vendor
         }
         catch {
-            New-ComponentResult -Type "WindowsService" -Name $configuredService.Name `
-                -IsHealthy $false -CurrentStatus "NotFoundOrUnavailable" -Details $_.Exception.Message
+            New-ComponentResult -Type "WindowsService" -Name $configuredService.ServiceName `
+                -IsHealthy $false -CurrentStatus "NotFoundOrUnavailable" -Details $_.Exception.Message `
+                -ApplicationName $configuredService.ApplicationName -BeatId $configuredService.BeatId `
+                -Squad $configuredService.Squad -Vendor $configuredService.Vendor
         }
     }
 }
@@ -222,18 +249,19 @@ function Update-MonitorState {
         $CurrentState,
 
         [Parameter(Mandatory)]
-        [int]$FailureThreshold,
+        [int]$FailureToleranceMinutes,
 
         [Parameter(Mandatory)]
         [bool]$SendRecoveryNotification
     )
 
-    if ($FailureThreshold -lt 1) {
-        $FailureThreshold = 1
+    if ($FailureToleranceMinutes -lt 0) {
+        $FailureToleranceMinutes = 0
     }
 
     $components = ConvertTo-StateDictionary -State $CurrentState
     $notifications = @()
+    $now = Get-Date
 
     foreach ($result in $Results) {
         $key = Get-ComponentKey -Type $result.Type -Name $result.Name
@@ -243,7 +271,7 @@ function Update-MonitorState {
                 Type = $result.Type
                 Name = $result.Name
                 IsInFailure = $false
-                ConsecutiveFailures = 0
+                FirstFailureAt = $null
                 LastStatus = "Unknown"
                 LastChange = $null
                 LastAlert = $null
@@ -262,21 +290,23 @@ function Update-MonitorState {
                     }
                 }
 
-                $entry.IsInFailure = $false
-                $entry.ConsecutiveFailures = 0
-                $entry.LastChange = (Get-Date).ToString("o")
+                $entry.LastChange = $now.ToString("o")
             }
-            else {
-                $entry.ConsecutiveFailures = 0
-            }
+
+            $entry.IsInFailure = $false
+            $entry.FirstFailureAt = $null
         }
         else {
-            $entry.ConsecutiveFailures = [int]$entry.ConsecutiveFailures + 1
+            if ([string]::IsNullOrEmpty($entry.FirstFailureAt)) {
+                $entry.FirstFailureAt = $now.ToString("o")
+            }
 
-            if (($entry.IsInFailure -ne $true) -and ($entry.ConsecutiveFailures -ge $FailureThreshold)) {
+            $elapsedMinutes = ($now - [datetime]$entry.FirstFailureAt).TotalMinutes
+
+            if (($entry.IsInFailure -ne $true) -and ($elapsedMinutes -ge $FailureToleranceMinutes)) {
                 $entry.IsInFailure = $true
-                $entry.LastChange = (Get-Date).ToString("o")
-                $entry.LastAlert = (Get-Date).ToString("o")
+                $entry.LastChange = $now.ToString("o")
+                $entry.LastAlert = $now.ToString("o")
 
                 $notifications += [pscustomobject]@{
                     EventType = "Failure"
@@ -291,8 +321,8 @@ function Update-MonitorState {
     }
 
     $newState = [ordered]@{
-        Version = 1
-        LastExecution = (Get-Date).ToString("o")
+        Version = 2
+        LastExecution = $now.ToString("o")
         Components = $components
     }
 
@@ -311,12 +341,8 @@ function Get-MonitoringCycle {
 
     $results = @()
 
-    if ($Configuration.WebSites) {
-        $results += @(Test-WebSites -WebSites $Configuration.WebSites)
-    }
-
-    if ($Configuration.ApplicationPools) {
-        $results += @(Test-ApplicationPools -ApplicationPools $Configuration.ApplicationPools)
+    if ($Configuration.WebApplications) {
+        $results += @(Test-WebApplications -WebApplications $Configuration.WebApplications)
     }
 
     if ($Configuration.WindowsServices) {
@@ -349,13 +375,19 @@ function New-NotificationMessage {
     $rows = foreach ($notification in $Notifications) {
         $component = $notification.Component
         $eventColor = if ($notification.EventType -eq "Failure") { "#b42318" } else { "#067647" }
+        $category = if ($component.Type -eq "WindowsService") { "Windows" } else { "Web" }
 
         @"
 <tr>
   <td style="padding:8px;border:1px solid #ddd;">$($notification.EventType)</td>
+  <td style="padding:8px;border:1px solid #ddd;">$category</td>
   <td style="padding:8px;border:1px solid #ddd;">$($component.Type)</td>
   <td style="padding:8px;border:1px solid #ddd;">$($component.Name)</td>
   <td style="padding:8px;border:1px solid #ddd;color:$eventColor;font-weight:bold;">$($component.CurrentStatus)</td>
+  <td style="padding:8px;border:1px solid #ddd;">$($component.ApplicationName)</td>
+  <td style="padding:8px;border:1px solid #ddd;">$($component.BeatId)</td>
+  <td style="padding:8px;border:1px solid #ddd;">$($component.Squad)</td>
+  <td style="padding:8px;border:1px solid #ddd;">$($component.Vendor)</td>
   <td style="padding:8px;border:1px solid #ddd;">$($component.Details)</td>
   <td style="padding:8px;border:1px solid #ddd;">$($component.CheckedAt)</td>
 </tr>
@@ -374,9 +406,14 @@ function New-NotificationMessage {
     <thead>
       <tr>
         <th style="padding:8px;border:1px solid #ddd;text-align:left;">Event</th>
+        <th style="padding:8px;border:1px solid #ddd;text-align:left;">Category</th>
         <th style="padding:8px;border:1px solid #ddd;text-align:left;">Type</th>
         <th style="padding:8px;border:1px solid #ddd;text-align:left;">Name</th>
         <th style="padding:8px;border:1px solid #ddd;text-align:left;">Status</th>
+        <th style="padding:8px;border:1px solid #ddd;text-align:left;">Application</th>
+        <th style="padding:8px;border:1px solid #ddd;text-align:left;">BEAT ID</th>
+        <th style="padding:8px;border:1px solid #ddd;text-align:left;">Squad</th>
+        <th style="padding:8px;border:1px solid #ddd;text-align:left;">Vendor</th>
         <th style="padding:8px;border:1px solid #ddd;text-align:left;">Details</th>
         <th style="padding:8px;border:1px solid #ddd;text-align:left;">Checked at</th>
       </tr>
@@ -398,6 +435,7 @@ function New-NotificationMessage {
 
 Export-ModuleMember -Function `
     Write-MonitorLog, `
+    Remove-OldMonitorLogs, `
     Get-MonitorConfiguration, `
     Get-MonitorState, `
     Save-MonitorState, `

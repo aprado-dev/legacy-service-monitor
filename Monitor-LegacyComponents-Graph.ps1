@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+#Requires -Version 3.0
 
 [CmdletBinding()]
 param(
@@ -116,13 +116,15 @@ try {
 
     Write-MonitorLog -Message "Microsoft Graph monitoring cycle started." -LogDirectory $logDirectory
 
+    Remove-OldMonitorLogs -LogDirectory $logDirectory -RetentionDays ([int]$configuration.General.LogRetentionDays)
+
     $results = @(Get-MonitoringCycle -Configuration $configuration)
     $currentState = Get-MonitorState -StateFile $configuration.General.StateFile
 
     $update = Update-MonitorState `
         -Results $results `
         -CurrentState $currentState `
-        -FailureThreshold ([int]$configuration.General.FailureThreshold) `
+        -FailureToleranceMinutes ([int]$configuration.General.FailureToleranceMinutes) `
         -SendRecoveryNotification ([bool]$configuration.General.SendRecoveryNotification)
 
     if (@($update.Notifications).Count -gt 0) {

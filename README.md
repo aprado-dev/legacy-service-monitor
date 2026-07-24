@@ -2,16 +2,21 @@
 
 This package monitors:
 
-- IIS websites
-- IIS application pools
+- IIS websites and their application pools, grouped as web applications
 - Windows services
 
 It sends a notification only when a component enters a failure state. It does not repeatedly send the same alert while the component remains unavailable. When the component becomes healthy again, the monitor can send one recovery notification.
+
+## Scope
+
+The monitor only checks the web applications and Windows services explicitly listed in `monitored-components.json`. It does not discover or monitor IIS sites, pools, or services automatically. This is intentional: the list is meant to represent only the applications owned by a single squad, so that squad is never alerted about components owned by other teams or vendors. Each entry also carries ownership metadata (application name, BEAT ID, squad, vendor) so that alert emails identify who owns the affected component.
 
 Two notification implementations are included:
 
 1. SMTP using `System.Net.Mail.SmtpClient`
 2. Microsoft Graph using Microsoft Entra ID application authentication
+
+For a guided first-time installation (SMTP, single server, pilot account), follow [PILOT-SETUP-GUIDE.md](PILOT-SETUP-GUIDE.md) instead of assembling the steps below yourself.
 
 ## Package contents
 
@@ -20,20 +25,22 @@ Two notification implementations are included:
 | `Monitor-Core.psm1` | Shared monitoring, logging, state management, and message generation |
 | `Monitor-LegacyComponents-Smtp.ps1` | Monitoring entry point using SMTP |
 | `Monitor-LegacyComponents-Graph.ps1` | Monitoring entry point using Microsoft Graph |
-| `monitored-components.json` | Websites, application pools, services, and notification configuration |
+| `monitored-components.json` | Squad-owned web applications, Windows services, ownership metadata, and notification configuration |
 | `Create-SmtpCredential.ps1` | Creates an encrypted SMTP credential file |
 | `Install-MonitoringTask.ps1` | Copies the files and registers the Windows scheduled task |
 
 ## Recommended Windows version
 
-Use Windows PowerShell 5.1 on the IIS server. The scripts use the built-in `WebAdministration` module and the `IIS:\` provider.
+The scripts require Windows PowerShell 3.0 or later and the built-in `WebAdministration` module with the `IIS:\` provider. This covers Windows Server 2012 and later out of the box, including servers that were never upgraded to a later Windows Management Framework.
 
-Before installation, verify:
+Before installation, verify on each target server:
 
 ```powershell
 $PSVersionTable.PSVersion
 Get-Module -ListAvailable WebAdministration
 ```
+
+Windows Server 2012 (RTM) ships with PowerShell 3.0 and Windows Server 2012 R2 ships with PowerShell 4.0 by default — both already meet the requirement; no Windows Management Framework upgrade is needed for this package.
 
 ## Service account
 
@@ -80,62 +87,70 @@ $path = "C:\ProgramData\LegacyServiceMonitor"
 icacls $path /grant "${account}:(OI)(CI)M" /T
 ```
 
+## Server and environment identification
+
+Set `General.Environment` in `monitored-components.json` to `DEV`, `QA`, or `PROD` for each server the package is installed on. The value appears in every alert subject line, so recipients can immediately tell which environment raised the alert. The server's computer name (`$env:COMPUTERNAME`) is captured automatically and appears in both the alert email body and every log line; no configuration is required for it.
+
 ## Configure monitored components
 
-Edit `monitored-components.json`.
+Edit `monitored-components.json`. Only list web applications and Windows services owned by your squad.
 
 Example:
 
 ```json
 {
-  "WebSites": [
+  "WebApplications": [
     {
-      "Name": "Legacy Portal",
-      "Enabled": true
-    }
-  ],
-  "ApplicationPools": [
-    {
-      "Name": "LegacyPortalPool",
+      "ApplicationName": "Legacy Portal",
+      "BeatId": "BEAT-1234",
+      "Squad": "Payments",
+      "Vendor": "TCS",
+      "SiteName": "Legacy Portal",
+      "PoolName": "LegacyPortalPool",
       "Enabled": true
     }
   ],
   "WindowsServices": [
     {
-      "Name": "LegacyIntegrationService",
-      "DisplayName": "Legacy Integration Service",
+      "ApplicationName": "Legacy Integration Service",
+      "BeatId": "BEAT-5678",
+      "Squad": "Payments",
+      "Vendor": "TCS",
+      "ServiceName": "LegacyIntegrationService",
       "Enabled": true
     }
   ]
 }
 ```
 
-Use the IIS website and application pool names exactly as they appear in IIS Manager.
+Each `WebApplications` entry represents one legacy web application and produces two checks: the IIS website (`SiteName`) and its application pool (`PoolName`) must both be `Started`. Use the site and pool names exactly as they appear in IIS Manager.
 
-Use the Windows service **service name**, not only the friendly display name.
-
-To identify service names:
+Use the Windows service **service name** in `ServiceName`, not only the friendly display name. To identify service names:
 
 ```powershell
 Get-Service | Sort-Object DisplayName | Select-Object Name, DisplayName, Status
 ```
 
+`ApplicationName`, `BeatId`, and `Squad` identify the owning application and team, and appear in alert emails. `Vendor` identifies the vendor operating the application on behalf of the squad; it defaults to `TCS` in this configuration but accepts any value.
+
 ## Failure suppression behavior
 
-`FailureThreshold` defines how many consecutive failed checks are required before the first alert.
+`FailureToleranceMinutes` defines how long a component must remain continuously unhealthy before the first alert is sent, regardless of how many checks occur in that window.
 
 Example:
 
 ```json
-"FailureThreshold": 2
+"FailureToleranceMinutes": 30
 ```
 
 With a five-minute task interval:
 
-- First failed check: no notification
-- Second consecutive failed check: one failure notification
-- Additional failed checks: no repeated notification
-- First healthy check after failure: one recovery notification
+- A component that fails and recovers within the tolerance window (for example, during a planned manual deployment) generates **no notification at all**.
+- A component that stays unhealthy for the full tolerance window generates one failure notification.
+- Additional failed checks after the alert: no repeated notification.
+- First healthy check after an alerted failure: one recovery notification.
+
+Set `FailureToleranceMinutes` to match the longest planned maintenance window you want to go unnoticed (for example, `30` for a 30-minute manual deployment). Set it to `0` to alert on the first failed check.
 
 State is stored in:
 
@@ -273,7 +288,7 @@ The installer:
 - Prevents overlapping executions
 - Restarts the task after execution failures
 - Sets a ten-minute execution time limit
-- Uses Windows PowerShell 5.1
+- Uses the Windows PowerShell 5.1 engine path (`WindowsPowerShell\v1.0\powershell.exe`), which runs any installed PowerShell version 3.0 or later
 
 ## Recommended Task Scheduler settings
 
@@ -326,7 +341,7 @@ For servers:
 2. Confirm the daily log file is created.
 3. Confirm `state.json` is created.
 4. Temporarily configure a nonexistent test service.
-5. Run the script enough times to reach `FailureThreshold`.
+5. Run the script until the elapsed time exceeds `FailureToleranceMinutes` (temporarily lower the value for faster testing).
 6. Confirm exactly one failure message is sent.
 7. Run the script again and confirm no duplicate message is sent.
 8. Restore the valid component name.
@@ -340,6 +355,10 @@ Daily logs are stored under:
 ```text
 C:\ProgramData\LegacyServiceMonitor\Logs
 ```
+
+Each log line is prefixed with the server name, so logs collected from multiple servers can be told apart.
+
+Log files older than `General.LogRetentionDays` (default `7`, matching a weekly retention policy) are deleted automatically at the start of every monitoring cycle.
 
 The scheduled task should return:
 

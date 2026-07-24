@@ -4,25 +4,28 @@
     "ApplicationName": "Legacy Applications Monitoring",
     "LogDirectory": "C:\\ProgramData\\LegacyServiceMonitor\\Logs",
     "StateFile": "C:\\ProgramData\\LegacyServiceMonitor\\state.json",
-    "FailureThreshold": 2,
+    "LogRetentionDays": 7,
+    "FailureToleranceMinutes": 30,
     "SendRecoveryNotification": true
   },
-  "WebSites": [
+  "WebApplications": [
     {
-      "Name": "Default Web Site",
-      "Enabled": true
-    }
-  ],
-  "ApplicationPools": [
-    {
-      "Name": "DefaultAppPool",
+      "ApplicationName": "Legacy Portal",
+      "BeatId": "BEAT-1234",
+      "Squad": "Payments",
+      "Vendor": "TCS",
+      "SiteName": "Default Web Site",
+      "PoolName": "DefaultAppPool",
       "Enabled": true
     }
   ],
   "WindowsServices": [
     {
-      "Name": "W3SVC",
-      "DisplayName": "World Wide Web Publishing Service",
+      "ApplicationName": "World Wide Web Publishing Service",
+      "BeatId": "BEAT-1234",
+      "Squad": "Payments",
+      "Vendor": "TCS",
+      "ServiceName": "W3SVC",
       "Enabled": true
     }
   ],
