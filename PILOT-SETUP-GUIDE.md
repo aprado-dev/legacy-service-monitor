@@ -65,7 +65,13 @@ Ask for the following, ideally in a single ticket/email:
 
 ## Step 4 — Copy the package to the server
 
-Copy the whole project folder to a **temporary working directory** on the target server, for example `C:\Temp\LegacyServiceMonitor`. It must contain all six files:
+Create a dedicated staging folder first — do not reuse `C:\Temp` on these servers, since it is already shared with many unrelated files:
+
+```powershell
+New-Item -Path "C:\TEMP_INSTALL\LegacyServiceMonitor" -ItemType Directory -Force
+```
+
+Copy the whole project folder into it. It must contain all six files:
 
 - `Monitor-Core.psm1`
 - `Monitor-LegacyComponents-Smtp.ps1`
@@ -74,7 +80,7 @@ Copy the whole project folder to a **temporary working directory** on the target
 - `Create-SmtpCredential.ps1`
 - `Install-MonitoringTask.ps1`
 
-`C:\ProgramData\LegacyServiceMonitor` **is** the official, final location — but you cannot run the installer from inside that folder. `Install-MonitoringTask.ps1` copies each file from wherever it is currently running (the working directory) into the install directory; if both were the same path, that copy step would fail with an error like *"Cannot overwrite the item with itself"*. Use any staging folder other than `C:\ProgramData\LegacyServiceMonitor` — the exact name and location do not matter, it only needs to exist long enough to run the installer once. The installer copies everything into the official location for you in Step 8.
+`C:\ProgramData\LegacyServiceMonitor` **is** the official, final location — but you cannot run the installer from inside that folder. `Install-MonitoringTask.ps1` copies each file from wherever it is currently running (the working directory) into the install directory; if both were the same path, that copy step would fail with an error like *"Cannot overwrite the item with itself"*. `C:\TEMP_INSTALL` only exists to stage the files long enough to run the installer once (Step 8) — the exact name does not matter, as long as it is not `C:\ProgramData\LegacyServiceMonitor` itself. Once the installer finishes, `C:\TEMP_INSTALL\LegacyServiceMonitor` is no longer needed; you may delete it or leave it — the running task does not depend on it.
 
 ## Step 5 — Identify the exact resource names
 
@@ -106,7 +112,7 @@ Skip this step entirely if Step 3 answered **anonymous relay by IP** or **Window
 If the relay requires an explicit username and password, run this **while logged in as the same account that will run the scheduled task** (your pilot account). The `.\` prefix means the command is relative to your current folder, so `Set-Location` into the working directory from Step 4 first:
 
 ```powershell
-Set-Location "C:\Temp\LegacyServiceMonitor"
+Set-Location "C:\TEMP_INSTALL\LegacyServiceMonitor"
 .\Create-SmtpCredential.ps1
 ```
 
@@ -117,7 +123,7 @@ Enter the SMTP account's username and password when prompted. The file it create
 Open PowerShell **as Administrator** (right-click → Run as Administrator), in the same session logged in as your pilot account. Move into the working directory from Step 4 first — the `.\` prefix below only works if your current folder is exactly where `Install-MonitoringTask.ps1` is:
 
 ```powershell
-Set-Location "C:\Temp\LegacyServiceMonitor"
+Set-Location "C:\TEMP_INSTALL\LegacyServiceMonitor"
 .\Install-MonitoringTask.ps1 `
   -NotificationMode Smtp `
   -ServiceAccount "DOMAIN\your_secondary_cwid" `
