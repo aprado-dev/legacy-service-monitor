@@ -383,7 +383,7 @@ C:\ProgramData\LegacyServiceMonitor\Logs
 
 Each log line is prefixed with the server name, so logs collected from multiple servers can be told apart.
 
-Log files older than `General.LogRetentionDays` (default `7`, matching a weekly retention policy) are deleted automatically at the start of every monitoring cycle.
+Log files older than `General.LogRetentionDays` (default `90`) are deleted automatically at the start of every monitoring cycle. Cleanup is based on each file's last-modified time, not its creation time — in practice these match, since each day writes to its own file and stops being touched once the next day's file starts.
 
 The scheduled task should return:
 

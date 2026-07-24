@@ -104,7 +104,7 @@ Open the file in the working directory and fill in your squad's real application
 - `Notification.VendorRecipients` — one entry per `Vendor` value you used above, each with its own `To`/`Cc` list, plus a required `Default` entry used as a fallback if a component's `Vendor` doesn't match any configured entry (see [README.md](README.md#notification-recipients)).
 - `Notification.Smtp` — `Server`, `Port`, `UseSsl`, `UseDefaultCredentials`, based on the answers from Step 3.
 
-Leave `FailureToleranceMinutes` (default `30`) and `LogRetentionDays` (default `7`) as-is unless told otherwise.
+Leave `FailureToleranceMinutes` (default `30`) and `LogRetentionDays` (default `90`) as-is unless told otherwise.
 
 ## Step 7 — Create the SMTP credential file (only if needed)
 

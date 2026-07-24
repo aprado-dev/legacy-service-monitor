@@ -4,7 +4,7 @@
     "ApplicationName": "Legacy Applications Monitoring",
     "LogDirectory": "C:\\ProgramData\\LegacyServiceMonitor\\Logs",
     "StateFile": "C:\\ProgramData\\LegacyServiceMonitor\\state.json",
-    "LogRetentionDays": 7,
+    "LogRetentionDays": 90,
     "FailureToleranceMinutes": 30,
     "SendRecoveryNotification": true
   },
