@@ -95,7 +95,7 @@ Set `General.Environment` in `monitored-components.json` to `DEV`, `QA`, or `PRO
 
 Edit `monitored-components.json`. Only list web applications and Windows services owned by your squad.
 
-Example:
+Example — `Acme Vendor` and every other value below are placeholders; JSON has no comment syntax, so replace them directly with your own organization's values before deploying:
 
 ```json
 {
@@ -104,7 +104,7 @@ Example:
       "ApplicationName": "Legacy Portal",
       "BeatId": "BEAT-1234",
       "Squad": "Payments",
-      "Vendor": "TCS",
+      "Vendor": "Acme Vendor",
       "SiteName": "Legacy Portal",
       "PoolName": "LegacyPortalPool",
       "Enabled": true
@@ -115,7 +115,7 @@ Example:
       "ApplicationName": "Legacy Integration Service",
       "BeatId": "BEAT-5678",
       "Squad": "Payments",
-      "Vendor": "TCS",
+      "Vendor": "Acme Vendor",
       "ServiceName": "LegacyIntegrationService",
       "Enabled": true
     }
@@ -131,7 +131,7 @@ Use the Windows service **service name** in `ServiceName`, not only the friendly
 Get-Service | Sort-Object DisplayName | Select-Object Name, DisplayName, Status
 ```
 
-`ApplicationName`, `BeatId`, and `Squad` identify the owning application and team, and appear in alert emails. `Vendor` identifies the vendor operating the application on behalf of the squad; it defaults to `TCS` in this configuration but accepts any value.
+`ApplicationName`, `BeatId`, and `Squad` identify the owning application and team, and appear in alert emails. `Vendor` identifies the vendor operating the application on behalf of the squad; `Acme Vendor` in this example is a placeholder — replace it with your real vendor name (or your own team's name, if there is no external vendor). The field accepts any value.
 
 ## Failure suppression behavior
 

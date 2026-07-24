@@ -11,7 +11,7 @@ Read [README.md](README.md) first for background on how the monitor works. This 
 - Administrative (RDP) access to the target server, using your secondary admin account.
 - The names of the IIS websites/application pools and Windows services your squad owns on that server.
 - Answers from the email/infrastructure team about the SMTP relay (see Step 3).
-- The four values to fill in per monitored component: **Application Name**, **BEAT ID**, **Squad**, **Vendor** (defaults to `TCS`).
+- The four values to fill in per monitored component: **Application Name**, **BEAT ID**, **Squad**, **Vendor** (`Acme Vendor` in the sample config is a placeholder — replace it with your real vendor name).
 
 ## Step 1 — Verify PowerShell and the IIS module on the target server
 
@@ -59,7 +59,7 @@ Ask for the following, ideally in a single ticket/email:
    - **Explicit username/password** — ask for a dedicated SMTP account (does not need to be a full mailbox).
 4. **Approved "From" address** — many relays only accept a specific, pre-approved sender address.
 5. Confirm **network access** is open from this server to the relay's host and port (open a firewall request now if not — this is usually the slowest step).
-6. If any recipient is an external domain (for example, a vendor address), confirm the relay allows sending outside `@bayer.com`.
+6. If any recipient is an external domain (for example, a vendor address), confirm the relay allows sending outside your organization's own email domain (e.g. `@client.com` — replace with your real domain).
 
 > Note on Windows integrated authentication: if the approved "From" address is a shared/generic mailbox (not your own), the relay may reject the message with an error like *"Client does not have permissions to send as this sender"* unless your account is explicitly granted **Send As** (or Send on Behalf) rights on that mailbox. Ask about this specifically if you choose this authentication method.
 

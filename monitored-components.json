@@ -13,7 +13,7 @@
       "ApplicationName": "Legacy Portal",
       "BeatId": "BEAT-1234",
       "Squad": "Payments",
-      "Vendor": "TCS",
+      "Vendor": "Acme Vendor",
       "SiteName": "Default Web Site",
       "PoolName": "DefaultAppPool",
       "Enabled": true
@@ -24,7 +24,7 @@
       "ApplicationName": "World Wide Web Publishing Service",
       "BeatId": "BEAT-1234",
       "Squad": "Payments",
-      "Vendor": "TCS",
+      "Vendor": "Acme Vendor",
       "ServiceName": "W3SVC",
       "Enabled": true
     }
