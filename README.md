@@ -160,22 +160,27 @@ A single monitoring cycle can send **more than one email** — one per vendor th
 
 ## Failure suppression behavior
 
-`FailureToleranceMinutes` defines how long a component must remain continuously unhealthy before the first alert is sent, regardless of how many checks occur in that window.
-
-Example:
+`FailureToleranceMinutes` defines how long a component must remain **continuously unhealthy, in wall-clock time**, before the first alert is sent — not a count of failed checks. This makes the behavior independent of the task interval: whether the task runs every minute or every ten minutes, a component only alerts once it has actually been down for the configured number of minutes.
 
 ```json
 "FailureToleranceMinutes": 30
 ```
 
-With a five-minute task interval:
+Internally, each monitored component keeps a small state entry (see below) with a `FirstFailureAt` timestamp. Every cycle recomputes `elapsed = now - FirstFailureAt` and compares it against `FailureToleranceMinutes` to decide whether to alert. Walking through a real failure, with a 5-minute task interval and `FailureToleranceMinutes: 30`:
 
-- A component that fails and recovers within the tolerance window (for example, during a planned manual deployment) generates **no notification at all**.
-- A component that stays unhealthy for the full tolerance window generates one failure notification.
-- Additional failed checks after the alert: no repeated notification.
-- First healthy check after an alerted failure: one recovery notification.
+| Time | What happens | Notification |
+|---|---|---|
+| 08:00 | Site goes down. `FirstFailureAt` is recorded. | None |
+| 08:05 – 08:25 | Still down each cycle; elapsed time is still under 30 minutes. | None |
+| 08:30 | Still down; elapsed time now exceeds 30 minutes. | **One** failure email |
+| 08:35 – 09:00 | Still down every cycle after that. | None (already alerted) |
+| 09:05 | Site is back up. | **One** recovery email |
 
-Set `FailureToleranceMinutes` to match the longest planned maintenance window you want to go unnoticed (for example, `30` for a 30-minute manual deployment). Set it to `0` to alert on the first failed check.
+If the site had come back at, say, 08:20 (before the 30-minute mark), the sequence would have produced **zero emails** — the failure resolved inside the tolerance window and never crossed the alert threshold. This is what makes a normal 30-minute manual deployment invisible to on-call without any manual "maintenance mode" step.
+
+Set `FailureToleranceMinutes` to match the longest planned maintenance window you want to go unnoticed. Set it to `0` to alert on the first failed check (no tolerance).
+
+### State file
 
 State is stored in:
 
@@ -183,7 +188,23 @@ State is stored in:
 C:\ProgramData\LegacyServiceMonitor\state.json
 ```
 
-Deleting the state file resets all alert suppression history.
+This file is a **current snapshot, not a history** — it is overwritten every cycle and holds exactly one entry per monitored component (keyed by `Type::Name`), not a log of past events. Deleting it resets all alert suppression history (every component is treated as freshly healthy on the next cycle).
+
+Example entry for a site that alerted at 08:30 and is still down:
+
+```json
+"WebSite::Legacy Portal": {
+  "Type": "WebSite",
+  "Name": "Legacy Portal",
+  "IsInFailure": true,
+  "FirstFailureAt": "2026-07-24T08:00:00.0000000-03:00",
+  "LastStatus": "Stopped",
+  "LastChange": "2026-07-24T08:30:00.0000000-03:00",
+  "LastAlert": "2026-07-24T08:30:00.0000000-03:00"
+}
+```
+
+`IsInFailure: true` is what suppresses repeat emails while the outage continues. Once the site recovers, this entry resets to `"IsInFailure": false, "FirstFailureAt": null`, ready to time a future outage from zero.
 
 ## SMTP configuration
 
@@ -381,9 +402,31 @@ Daily logs are stored under:
 C:\ProgramData\LegacyServiceMonitor\Logs
 ```
 
-Each log line is prefixed with the server name, so logs collected from multiple servers can be told apart.
+One file is written per calendar day (`monitor-yyyy-MM-dd.log`). A new line is appended at fixed points in every monitoring cycle — **not** once per monitored site, pool, or service. The individual Started/Stopped/Running status of each component is only ever written to `state.json` (see "State file" above); it is never logged line-by-line. This means log volume depends on how often the task runs and how often alerts actually fire, **not** on how many components are configured — monitoring 30 components produces the same log volume as monitoring 3, as long as neither has active failures.
 
-Log files older than `General.LogRetentionDays` (default `90`) are deleted automatically at the start of every monitoring cycle. Cleanup is based on each file's last-modified time, not its creation time — in practice these match, since each day writes to its own file and stops being touched once the next day's file starts.
+| Moment | Level | Example message |
+|---|---|---|
+| Cycle starts | `INFO` | `SMTP monitoring cycle started.` |
+| No alert/recovery needed this cycle | `INFO` | `No notification was required.` |
+| Email sent to a vendor | `INFO` | `SMTP notification sent to vendor 'Acme Vendor'. Event count: 1` |
+| A component's `Vendor` has no matching recipient list | `WARN` | `No VendorRecipients entry for vendor 'Globant'. Falling back to Default recipients.` |
+| Cycle completes | `INFO` | `SMTP monitoring cycle completed successfully.` |
+| Unexpected error | `ERROR` | `SMTP monitoring cycle failed: <exception message>` |
+
+Example of a real log excerpt, spanning a quiet cycle followed by one that raises an alert:
+
+```text
+2026-07-24 08:00:07 [SERVER01] [INFO] SMTP monitoring cycle started.
+2026-07-24 08:00:08 [SERVER01] [INFO] No notification was required.
+2026-07-24 08:00:08 [SERVER01] [INFO] SMTP monitoring cycle completed successfully.
+2026-07-24 08:05:07 [SERVER01] [INFO] SMTP monitoring cycle started.
+2026-07-24 08:05:09 [SERVER01] [INFO] SMTP notification sent to vendor 'Acme Vendor'. Event count: 1
+2026-07-24 08:05:09 [SERVER01] [INFO] SMTP monitoring cycle completed successfully.
+```
+
+Each line is prefixed with the server name, so logs collected from multiple servers can be told apart.
+
+**Estimating volume:** with the default 5-minute interval, that is `1440 / 5 = 288` cycles per day, or roughly 3 log lines per cycle (plus one extra line per vendor that has an active alert or recovery that cycle) — around 850–900 lines/day, well under 100 KB/day regardless of how many web applications or Windows services are configured. Log files older than `General.LogRetentionDays` (default `90`) are deleted automatically at the start of every monitoring cycle, based on each file's last-modified time (in practice equivalent to its creation date, since each day writes to its own file and stops being touched once the next day's file starts). At the default 90-day retention, steady-state disk usage is on the order of a few megabytes.
 
 The scheduled task should return:
 
