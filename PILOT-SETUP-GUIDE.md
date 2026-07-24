@@ -103,9 +103,10 @@ Leave `FailureToleranceMinutes` (default `30`) and `LogRetentionDays` (default `
 
 Skip this step entirely if Step 3 answered **anonymous relay by IP** or **Windows integrated authentication**.
 
-If the relay requires an explicit username and password, run this **while logged in as the same account that will run the scheduled task** (your pilot account):
+If the relay requires an explicit username and password, run this **while logged in as the same account that will run the scheduled task** (your pilot account). The `.\` prefix means the command is relative to your current folder, so `Set-Location` into the working directory from Step 4 first:
 
 ```powershell
+Set-Location "C:\Temp\LegacyServiceMonitor"
 .\Create-SmtpCredential.ps1
 ```
 
@@ -113,9 +114,10 @@ Enter the SMTP account's username and password when prompted. The file it create
 
 ## Step 8 — Install the scheduled task
 
-Open PowerShell **as Administrator** (right-click → Run as Administrator), in the same session logged in as your pilot account, from the working directory:
+Open PowerShell **as Administrator** (right-click → Run as Administrator), in the same session logged in as your pilot account. Move into the working directory from Step 4 first — the `.\` prefix below only works if your current folder is exactly where `Install-MonitoringTask.ps1` is:
 
 ```powershell
+Set-Location "C:\Temp\LegacyServiceMonitor"
 .\Install-MonitoringTask.ps1 `
   -NotificationMode Smtp `
   -ServiceAccount "DOMAIN\your_secondary_cwid" `
