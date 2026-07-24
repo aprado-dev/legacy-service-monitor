@@ -352,6 +352,69 @@ function Get-MonitoringCycle {
     return $results
 }
 
+function Group-NotificationsByVendor {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        $Configuration,
+
+        [Parameter(Mandatory)]
+        [object[]]$Notifications,
+
+        [Parameter(Mandatory)]
+        [string]$LogDirectory
+    )
+
+    $notificationProperty = $Configuration.Notification.PSObject.Properties['VendorRecipients']
+    $vendorRecipients = if ($null -ne $notificationProperty) { $notificationProperty.Value } else { $null }
+    $defaultProperty = if ($null -ne $vendorRecipients) { $vendorRecipients.PSObject.Properties['Default'] } else { $null }
+
+    if ($null -eq $defaultProperty) {
+        throw "Configuration.Notification.VendorRecipients.Default is required but was not found."
+    }
+
+    $byVendor = [ordered]@{}
+
+    foreach ($notification in $Notifications) {
+        $vendor = [string]$notification.Component.Vendor
+
+        if ([string]::IsNullOrWhiteSpace($vendor)) {
+            $vendor = "Unknown"
+        }
+
+        if (-not $byVendor.Contains($vendor)) {
+            $byVendor[$vendor] = @()
+        }
+
+        $byVendor[$vendor] += $notification
+    }
+
+    $groups = foreach ($vendor in $byVendor.Keys) {
+        $vendorProperty = $vendorRecipients.PSObject.Properties[$vendor]
+
+        if ($null -ne $vendorProperty) {
+            $recipients = $vendorProperty.Value
+        }
+        else {
+            Write-MonitorLog `
+                -Message ("No VendorRecipients entry for vendor '{0}'. Falling back to Default recipients." -f $vendor) `
+                -Level "WARN" `
+                -LogDirectory $LogDirectory
+
+            $recipients = $defaultProperty.Value
+        }
+
+        [pscustomobject]@{
+            Vendor = $vendor
+            To = @($recipients.To)
+            Cc = @($recipients.Cc)
+            Notifications = $byVendor[$vendor]
+        }
+    }
+
+    return @($groups)
+}
+
 function New-NotificationMessage {
     [CmdletBinding()]
     param(
@@ -359,17 +422,21 @@ function New-NotificationMessage {
         $Configuration,
 
         [Parameter(Mandatory)]
-        [object[]]$Notifications
+        [object[]]$Notifications,
+
+        [Parameter(Mandatory)]
+        [string]$Vendor
     )
 
     $failureCount = @($Notifications | Where-Object { $_.EventType -eq "Failure" }).Count
     $recoveryCount = @($Notifications | Where-Object { $_.EventType -eq "Recovery" }).Count
 
     $statusLabel = if ($failureCount -gt 0) { "ALERT" } else { "RECOVERY" }
-    $subject = "{0} [{1}] [{2}] {3} - {4}" -f `
+    $subject = "{0} [{1}] [{2}] [{3}] {4} - {5}" -f `
         $Configuration.Notification.SubjectPrefix,
         $Configuration.General.Environment,
         $env:COMPUTERNAME,
+        $Vendor,
         $Configuration.General.ApplicationName,
         $statusLabel
 
@@ -442,4 +509,5 @@ Export-ModuleMember -Function `
     Save-MonitorState, `
     Get-MonitoringCycle, `
     Update-MonitorState, `
+    Group-NotificationsByVendor, `
     New-NotificationMessage

@@ -31,11 +31,21 @@
   ],
   "Notification": {
     "From": "monitoring@company.com",
-    "To": [
-      "support-team@company.com"
-    ],
-    "Cc": [],
     "SubjectPrefix": "[Legacy Monitor]",
+    "VendorRecipients": {
+      "Default": {
+        "To": [
+          "fallback-admin@company.com"
+        ],
+        "Cc": []
+      },
+      "Acme Vendor": {
+        "To": [
+          "support-team@company.com"
+        ],
+        "Cc": []
+      }
+    },
     "Smtp": {
       "Server": "smtp.company.com",
       "Port": 587,

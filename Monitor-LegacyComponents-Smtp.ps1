@@ -17,6 +17,11 @@ function Send-SmtpMonitorEmail {
         $Configuration,
 
         [Parameter(Mandatory)]
+        [string[]]$To,
+
+        [string[]]$Cc = @(),
+
+        [Parameter(Mandatory)]
         [string]$Subject,
 
         [Parameter(Mandatory)]
@@ -30,13 +35,13 @@ function Send-SmtpMonitorEmail {
     try {
         $message.From = [System.Net.Mail.MailAddress]::new($Configuration.Notification.From)
 
-        foreach ($recipient in @($Configuration.Notification.To)) {
+        foreach ($recipient in @($To)) {
             if (-not [string]::IsNullOrWhiteSpace($recipient)) {
                 [void]$message.To.Add($recipient)
             }
         }
 
-        foreach ($recipient in @($Configuration.Notification.Cc)) {
+        foreach ($recipient in @($Cc)) {
             if (-not [string]::IsNullOrWhiteSpace($recipient)) {
                 [void]$message.CC.Add($recipient)
             }
@@ -96,18 +101,28 @@ try {
         -SendRecoveryNotification ([bool]$configuration.General.SendRecoveryNotification)
 
     if (@($update.Notifications).Count -gt 0) {
-        $message = New-NotificationMessage `
+        $groups = Group-NotificationsByVendor `
             -Configuration $configuration `
-            -Notifications @($update.Notifications)
-
-        Send-SmtpMonitorEmail `
-            -Configuration $configuration `
-            -Subject $message.Subject `
-            -BodyHtml $message.BodyHtml
-
-        Write-MonitorLog `
-            -Message ("SMTP notification sent. Event count: {0}" -f @($update.Notifications).Count) `
+            -Notifications @($update.Notifications) `
             -LogDirectory $logDirectory
+
+        foreach ($group in $groups) {
+            $message = New-NotificationMessage `
+                -Configuration $configuration `
+                -Notifications @($group.Notifications) `
+                -Vendor $group.Vendor
+
+            Send-SmtpMonitorEmail `
+                -Configuration $configuration `
+                -To $group.To `
+                -Cc $group.Cc `
+                -Subject $message.Subject `
+                -BodyHtml $message.BodyHtml
+
+            Write-MonitorLog `
+                -Message ("SMTP notification sent to vendor '{0}'. Event count: {1}" -f $group.Vendor, @($group.Notifications).Count) `
+                -LogDirectory $logDirectory
+        }
     }
     else {
         Write-MonitorLog -Message "No notification was required." -LogDirectory $logDirectory

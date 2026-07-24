@@ -33,6 +33,11 @@ function Send-GraphMonitorEmail {
         $Configuration,
 
         [Parameter(Mandatory)]
+        [string[]]$To,
+
+        [string[]]$Cc = @(),
+
+        [Parameter(Mandatory)]
         [string]$Subject,
 
         [Parameter(Mandatory)]
@@ -92,8 +97,8 @@ function Send-GraphMonitorEmail {
                 contentType = "HTML"
                 content = $BodyHtml
             }
-            toRecipients = ConvertTo-GraphRecipient -Addresses @($Configuration.Notification.To)
-            ccRecipients = ConvertTo-GraphRecipient -Addresses @($Configuration.Notification.Cc)
+            toRecipients = ConvertTo-GraphRecipient -Addresses @($To)
+            ccRecipients = ConvertTo-GraphRecipient -Addresses @($Cc)
         }
         saveToSentItems = $true
     } | ConvertTo-Json -Depth 10
@@ -128,18 +133,28 @@ try {
         -SendRecoveryNotification ([bool]$configuration.General.SendRecoveryNotification)
 
     if (@($update.Notifications).Count -gt 0) {
-        $message = New-NotificationMessage `
+        $groups = Group-NotificationsByVendor `
             -Configuration $configuration `
-            -Notifications @($update.Notifications)
-
-        Send-GraphMonitorEmail `
-            -Configuration $configuration `
-            -Subject $message.Subject `
-            -BodyHtml $message.BodyHtml
-
-        Write-MonitorLog `
-            -Message ("Microsoft Graph notification sent. Event count: {0}" -f @($update.Notifications).Count) `
+            -Notifications @($update.Notifications) `
             -LogDirectory $logDirectory
+
+        foreach ($group in $groups) {
+            $message = New-NotificationMessage `
+                -Configuration $configuration `
+                -Notifications @($group.Notifications) `
+                -Vendor $group.Vendor
+
+            Send-GraphMonitorEmail `
+                -Configuration $configuration `
+                -To $group.To `
+                -Cc $group.Cc `
+                -Subject $message.Subject `
+                -BodyHtml $message.BodyHtml
+
+            Write-MonitorLog `
+                -Message ("Microsoft Graph notification sent to vendor '{0}'. Event count: {1}" -f $group.Vendor, @($group.Notifications).Count) `
+                -LogDirectory $logDirectory
+        }
     }
     else {
         Write-MonitorLog -Message "No notification was required." -LogDirectory $logDirectory

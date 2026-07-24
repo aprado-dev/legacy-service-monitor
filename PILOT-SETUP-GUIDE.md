@@ -100,7 +100,8 @@ Open the file in the working directory and fill in your squad's real application
 - One entry per web application under `WebApplications`, with `SiteName` and `PoolName` from Step 5.
 - One entry per Windows service under `WindowsServices`, with `ServiceName` from Step 5.
 - `ApplicationName`, `BeatId`, `Squad`, `Vendor` for every entry.
-- `Notification.From`, `Notification.To` (your squad's distribution list).
+- `Notification.From`.
+- `Notification.VendorRecipients` — one entry per `Vendor` value you used above, each with its own `To`/`Cc` list, plus a required `Default` entry used as a fallback if a component's `Vendor` doesn't match any configured entry (see [README.md](README.md#notification-recipients)).
 - `Notification.Smtp` — `Server`, `Port`, `UseSsl`, `UseDefaultCredentials`, based on the answers from Step 3.
 
 Leave `FailureToleranceMinutes` (default `30`) and `LogRetentionDays` (default `7`) as-is unless told otherwise.
