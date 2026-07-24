@@ -366,9 +366,10 @@ function New-NotificationMessage {
     $recoveryCount = @($Notifications | Where-Object { $_.EventType -eq "Recovery" }).Count
 
     $statusLabel = if ($failureCount -gt 0) { "ALERT" } else { "RECOVERY" }
-    $subject = "{0} [{1}] {2} - {3}" -f `
+    $subject = "{0} [{1}] [{2}] {3} - {4}" -f `
         $Configuration.Notification.SubjectPrefix,
         $Configuration.General.Environment,
+        $env:COMPUTERNAME,
         $Configuration.General.ApplicationName,
         $statusLabel
 

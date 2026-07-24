@@ -89,7 +89,11 @@ icacls $path /grant "${account}:(OI)(CI)M" /T
 
 ## Server and environment identification
 
-Set `General.Environment` in `monitored-components.json` to `DEV`, `QA`, or `PROD` for each server the package is installed on. The value appears in every alert subject line, so recipients can immediately tell which environment raised the alert. The server's computer name (`$env:COMPUTERNAME`) is captured automatically and appears in both the alert email body and every log line; no configuration is required for it.
+Set `General.Environment` in `monitored-components.json` to `DEV`, `QA`, or `PROD` for each server the package is installed on. The server's computer name (`$env:COMPUTERNAME`) is captured automatically; no configuration is required for it. Both the environment and the server name appear in every alert subject line, in the log lines, and in the alert email body, so recipients can immediately tell which server and environment raised the alert:
+
+```text
+[Legacy Monitor] [QA] [SERVER01] Legacy Applications Monitoring - ALERT
+```
 
 ## Configure monitored components
 
